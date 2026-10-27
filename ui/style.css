@@ -1,0 +1,55 @@
+:root {
+  --fade: 180ms;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "Noto Sans CJK SC", sans-serif;
+}
+
+.toast {
+  width: 100%;
+  padding: 13px 15px;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 14px;
+  background: rgb(22 22 24 / 88%);
+  backdrop-filter: blur(20px);
+  box-shadow: 0 16px 42px rgb(0 0 0 / 25%);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity var(--fade) ease, transform var(--fade) ease;
+  will-change: opacity, transform;
+}
+
+.toast[data-state="visible"] {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.kind {
+  display: block;
+  margin-bottom: 4px;
+  color: rgb(233 233 238 / 52%);
+  font-size: 11px;
+  line-height: 1;
+  letter-spacing: 0.08em;
+}
+
+.message {
+  margin: 0;
+  color: #f4f4f6;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}

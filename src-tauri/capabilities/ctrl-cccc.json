@@ -1,0 +1,11 @@
+{
+  "identifier": "ctrl-cccc",
+  "description": "Minimal permissions for the hidden toast webview",
+  "windows": [
+    "main",
+    "toast"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

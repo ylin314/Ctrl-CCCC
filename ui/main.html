@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'" />
+  <title>Ctrl-CCCC</title>
+  <link rel="stylesheet" href="main.css" />
+</head>
+<body>
+  <main class="panel">
+    <header>
+      <h1>Ctrl-CCCC</h1>
+      <p>主菜单 / 通知设置</p>
+    </header>
+
+    <form id="settings">
+      <label class="field">
+        <span>通知位置</span>
+        <select id="position">
+          <option value="top-left">左上角</option>
+          <option value="top-right">右上角</option>
+          <option value="bottom-left">左下角</option>
+          <option value="bottom-right">右下角</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>显示时长（毫秒）</span>
+        <input id="duration" type="number" min="300" max="30000" step="100" required />
+      </label>
+
+      <label class="field">
+        <span>淡入淡出（毫秒）</span>
+        <input id="fade" type="number" min="0" max="15000" step="10" required />
+      </label>
+
+      <label class="check">
+        <input id="autostart" type="checkbox" />
+        <span>开机自动启动</span>
+      </label>
+
+      <footer>
+        <output id="status"></output>
+        <button type="submit">保存设置</button>
+      </footer>
+    </form>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>
