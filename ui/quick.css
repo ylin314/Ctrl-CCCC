@@ -1,0 +1,118 @@
+:root {
+  color-scheme: dark;
+  font-family: Inter, "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, "Noto Sans CJK SC", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: transparent;
+}
+
+.quick-panel {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid rgb(255 255 255 / 10%);
+  border-radius: 14px;
+  background: rgb(20 20 23 / 94%);
+  color: #ededf0;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 32%);
+  overflow: hidden;
+}
+
+header {
+  -webkit-app-region: drag;
+  app-region: drag;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 13px 14px 10px;
+  border-bottom: 1px solid rgb(255 255 255 / 7%);
+  font-size: 13px;
+}
+
+header strong { font-size: 13px; }
+
+header button {
+  -webkit-app-region: no-drag;
+  app-region: no-drag;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  border-radius: 7px;
+  background: #26262d;
+  font-size: 12px;
+}
+
+.quick-list {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  padding: 10px;
+}
+
+.quick-item {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / 8%);
+  border-radius: 10px;
+  background: #181820;
+  color: inherit;
+  text-align: left;
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.quick-item:hover { border-color: rgb(90 141 255 / 70%); background: #20222c; }
+
+.quick-item .kind {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #26262d;
+  color: rgb(237 237 240 / 68%);
+  font-size: 11px;
+}
+
+.quick-item img {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.preview {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-label { color: rgb(237 237 240 / 48%); font-size: 11px; }
+
+.empty {
+  padding: 36px 0;
+  color: rgb(237 237 240 / 42%);
+  text-align: center;
+  font-size: 12px;
+}
+
+.hidden { display: none !important; }
+

@@ -1,10 +1,26 @@
-# Ctrl-CCCC
+<div align="center">
+  <img src="src-tauri/icons/icon.png" alt="Ctrl-CCCC Logo" width="96" />
+
+  <h1>Ctrl-CCCC</h1>
+
+  <p>轻量级跨平台剪贴板变化通知工具</p>
+
+  [![Rust](https://img.shields.io/badge/Rust-1.77%2B-DEA584?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+  [![Tauri](https://img.shields.io/badge/Tauri-v2-24C8D8?logo=tauri&logoColor=white)](https://v2.tauri.app/)
+  [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-4A90E2)](#)
+  [![UI](https://img.shields.io/badge/UI-HTML%20%7C%20CSS%20%7C%20JS-E34F26)](#)
+  [![Clipboard](https://img.shields.io/badge/Clipboard-clipboard--rs%20%2B%20arboard-7C3AED)](#)
+  [![Version](https://img.shields.io/badge/Version-0.1.0-blue)](#)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
+</div>
+
+---
 
 你是否遇到复制后粘贴发现没有复制成功的情况？
 
 你是否遇到不确定是否复制成功的情况？
 
-Ctrl-CCCC 是一款基于Rust和Tauri的轻量级跨平台剪贴板变化通知工具，能在复制内容后及时进行通知
+Ctrl-CCCC 是一款基于 Rust 和 Tauri 的轻量级跨平台剪贴板变化通知工具，能在复制内容后及时进行通知。
 
 ## 行为
 
@@ -18,6 +34,9 @@ Ctrl-CCCC 是一款基于Rust和Tauri的轻量级跨平台剪贴板变化通知�
 - 图片显示 `图片 [宽]x[高]`。
 - 文件显示 `文件：[文件名] 等 N 个`。
 - 空内容显示 `（空）`。
+- 剪贴板历史默认保留 50 条，可设置为 5-500 条。
+- 可从历史中单击任意条目重新复制。
+- 全局快捷键可打开快捷输入面板，单击条目直接输入到当前位置，默认 `Win+C`。
 
 ## 设置
 
@@ -27,6 +46,8 @@ Ctrl-CCCC 是一款基于Rust和Tauri的轻量级跨平台剪贴板变化通知�
 - 显示时长
 - 淡入淡出时间
 - 开机自动启动
+- 历史最多保留条数
+- 快捷输入快捷键
 
 配置保存在系统配置目录：
 
@@ -41,7 +62,9 @@ Ctrl-CCCC 是一款基于Rust和Tauri的轻量级跨平台剪贴板变化通知�
   "position": "bottom-right",
   "duration_ms": 2200,
   "fade_ms": 180,
-  "autostart": false
+  "autostart": false,
+  "history_limit": 50,
+  "quick_hotkey": "super+c"
 }
 ```
 
@@ -65,3 +88,9 @@ cargo tauri build
 ```powershell
 cargo tauri build --no-bundle
 ```
+
+## 开源协议
+
+本项目基于 [MIT License](./LICENSE) 开源。
+
+

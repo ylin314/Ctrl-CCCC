@@ -1,11 +1,13 @@
 {
   "identifier": "ctrl-cccc",
-  "description": "Minimal permissions for the hidden toast webview",
+  "description": "Permissions for the main menu, history view, toast, and draggable quick paste webviews",
   "windows": [
     "main",
-    "toast"
+    "toast",
+    "quick"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-start-dragging"
   ]
 }

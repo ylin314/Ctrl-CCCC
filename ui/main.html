@@ -3,48 +3,75 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:" />
   <title>Ctrl-CCCC</title>
   <link rel="stylesheet" href="main.css" />
 </head>
 <body>
   <main class="panel">
-    <header>
-      <h1>Ctrl-CCCC</h1>
-      <p>主菜单 / 通知设置</p>
-    </header>
+    <section id="settings-view" class="view active">
+      <header>
+        <h1>Ctrl-CCCC</h1>
+        <p>主菜单 / 通知设置</p>
+      </header>
 
-    <form id="settings">
-      <label class="field">
-        <span>通知位置</span>
-        <select id="position">
-          <option value="top-left">左上角</option>
-          <option value="top-right">右上角</option>
-          <option value="bottom-left">左下角</option>
-          <option value="bottom-right">右下角</option>
-        </select>
-      </label>
+      <form id="settings">
+        <label class="field">
+          <span>通知位置</span>
+          <select id="position">
+            <option value="top-left">左上角</option>
+            <option value="top-right">右上角</option>
+            <option value="bottom-left">左下角</option>
+            <option value="bottom-right">右下角</option>
+          </select>
+        </label>
 
-      <label class="field">
-        <span>显示时长（毫秒）</span>
-        <input id="duration" type="number" min="300" max="30000" step="100" required />
-      </label>
+        <label class="field">
+          <span>显示时长（毫秒）</span>
+          <input id="duration" type="number" min="300" max="30000" step="100" required />
+        </label>
 
-      <label class="field">
-        <span>淡入淡出（毫秒）</span>
-        <input id="fade" type="number" min="0" max="15000" step="10" required />
-      </label>
+        <label class="field">
+          <span>淡入淡出（毫秒）</span>
+          <input id="fade" type="number" min="0" max="15000" step="10" required />
+        </label>
 
-      <label class="check">
-        <input id="autostart" type="checkbox" />
-        <span>开机自动启动</span>
-      </label>
+        <label class="field">
+          <span>历史最多保留条数（5 - 500）</span>
+          <input id="history-limit" type="number" min="5" max="500" step="1" required />
+        </label>
 
-      <footer>
-        <output id="status"></output>
-        <button type="submit">保存设置</button>
-      </footer>
-    </form>
+        <label class="field">
+          <span>快捷输入快捷键</span>
+          <input id="quick-hotkey" type="text" readonly placeholder="点击后按下组合键" />
+        </label>
+
+        <label class="check">
+          <input id="autostart" type="checkbox" />
+          <span>开机自动启动</span>
+        </label>
+
+        <footer>
+          <output id="status"></output>
+          <div class="actions">
+            <button id="history-button" type="button">剪切板历史</button>
+            <button type="submit">保存设置</button>
+          </div>
+        </footer>
+      </form>
+    </section>
+
+    <section id="history-view" class="view">
+      <header class="page-header">
+        <div>
+          <button id="back-button" class="ghost" type="button">← 返回</button>
+          <h1>剪切板历史</h1>
+        </div>
+      </header>
+
+      <div id="history-list" class="history-list"></div>
+      <div id="history-empty" class="empty hidden">暂无历史记录</div>
+    </section>
   </main>
 
   <script src="main.js"></script>

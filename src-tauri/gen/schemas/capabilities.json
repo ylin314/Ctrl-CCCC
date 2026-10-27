@@ -1,1 +1,1 @@
-{"ctrl-cccc":{"identifier":"ctrl-cccc","description":"Minimal permissions for the hidden toast webview","local":true,"windows":["main","toast"],"permissions":["core:default"]}}
+{"ctrl-cccc":{"identifier":"ctrl-cccc","description":"Permissions for the main menu, history view, toast, and draggable quick paste webviews","local":true,"windows":["main","toast","quick"],"permissions":["core:default","core:window:allow-start-dragging"]}}

@@ -13,14 +13,16 @@
         "label": "main",
         "title": "Ctrl-CCCC",
         "url": "main.html",
-        "width": 420,
-        "height": 520,
+        "width": 460,
+        "height": 640,
         "visible": false,
         "center": true,
-        "resizable": false,
         "skipTaskbar": false,
         "focus": true,
-        "decorations": true
+        "decorations": true,
+        "resizable": true,
+        "minWidth": 460,
+        "minHeight": 640
       },
       {
         "label": "toast",
@@ -39,6 +41,24 @@
         "center": false,
         "dragDropEnabled": false,
         "focusable": false
+      },
+      {
+        "label": "quick",
+        "title": "Ctrl-CCCC 快捷输入",
+        "url": "quick.html",
+        "width": 360,
+        "height": 460,
+        "visible": false,
+        "center": false,
+        "resizable": false,
+        "skipTaskbar": true,
+        "focus": true,
+        "decorations": false,
+        "transparent": true,
+        "alwaysOnTop": true,
+        "shadow": false,
+        "dragDropEnabled": false,
+        "focusable": true
       }
     ],
     "security": {
