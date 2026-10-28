@@ -2,10 +2,10 @@
   "use strict";
 
   const invoke = window.__TAURI__?.core?.invoke;
+  const convertFileSrc = window.__TAURI__?.core?.convertFileSrc;
   const listen = window.__TAURI__?.event?.listen;
   const list = document.getElementById("quick-list");
   const empty = document.getElementById("quick-empty");
-  const imageDataUrls = new Map();
 
   if (!invoke) {
     empty.textContent = "Tauri API 不可用";
@@ -19,32 +19,17 @@
     return "输入";
   }
 
-  // Image snapshots live on disk and are handed back as `data:image/png` URLs.
-  // If a snapshot cannot be rendered (missing file, blocked CSP, decode error)
-  // degrade to the plain "IMG" badge instead of a broken thumbnail.
-  async function loadImage(entry, kind) {
-    const fallback = () => {
-      image.remove();
-      kind.textContent = "IMG";
-    };
+  // Images are loaded directly from disk through the Tauri asset protocol.
+  // Prefer the downscaled thumbnail for list rendering.
+  function loadImage(entry, kind) {
+    const src = entry.image_thumbnail_path || entry.image_path;
+    if (!src) { kind.textContent = "IMG"; return; }
 
     const image = document.createElement("img");
     image.alt = entry.preview;
-    image.addEventListener("error", fallback);
+    image.addEventListener("error", () => { image.remove(); kind.textContent = "IMG"; });
+    image.src = convertFileSrc(src);
     kind.append(image);
-
-    if (imageDataUrls.has(entry.id)) {
-      image.src = imageDataUrls.get(entry.id);
-      return;
-    }
-
-    try {
-      const dataUrl = await invoke("get_history_image", { id: entry.id });
-      imageDataUrls.set(entry.id, dataUrl);
-      image.src = dataUrl;
-    } catch (_) {
-      fallback();
-    }
   }
 
   function createItem(entry) {
@@ -55,7 +40,7 @@
 
     const kind = document.createElement("span");
     kind.className = "kind";
-    if (entry.image_path) {
+    if (entry.image_thumbnail_path || entry.image_path) {
       loadImage(entry, kind);
     } else {
       kind.textContent = entry.kind === "image" ? "IMG" : entry.kind === "files" ? "FILE" : "TXT";
@@ -108,9 +93,6 @@
     dragRequested = false;
   }
 
-  // A short threshold keeps an ordinary click on the header from entering the
-  // OS drag loop. Once exceeded, `begin_quick_paste_drag` sets the Rust-side
-  // dragging flag *before* native dragging starts, avoiding the focus-loss race.
   quickTitle.addEventListener("pointerdown", (event) => {
     if (event.button !== 0 || !(event.target instanceof Element)) return;
     if (event.target.closest("#close-button")) return;
@@ -167,4 +149,3 @@
   window.ctrlCCCC = { refresh };
   refresh();
 })();
-

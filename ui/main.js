@@ -1,7 +1,7 @@
 (() => {
   "use strict";
 
-  const { invoke } = window.__TAURI__.core;
+  const { invoke, convertFileSrc } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
   const form = document.getElementById("settings");
   const position = document.getElementById("position");
@@ -18,7 +18,6 @@
   const historyEmpty = document.getElementById("history-empty");
   let activeView = "settings";
   let hotkeyCaptureActive = false;
-  const imageDataUrls = new Map();
 
   async function loadSettings() {
     try {
@@ -79,9 +78,7 @@
   }
 
   function formatTime(timestampMs) {
-    return new Date(timestampMs).toLocaleString("zh-CN", {
-      hour12: false,
-    });
+    return new Date(timestampMs).toLocaleString("zh-CN", { hour12: false });
   }
 
   function entryKindLabel(entry) {
@@ -98,7 +95,7 @@
 
     const kind = document.createElement("span");
     kind.className = "kind";
-    if (entry.image_path) {
+    if (entry.image_thumbnail_path || entry.image_path) {
       loadImage(entry, kind);
     } else {
       kind.textContent = entry.kind === "image" ? "IMG" : entry.kind === "files" ? "FILE" : "TXT";
@@ -135,32 +132,19 @@
     return item;
   }
 
-  // Image snapshots live on disk and are handed back as `data:image/png` URLs.
-  // If a snapshot cannot be rendered (missing file, blocked CSP, decode error)
-  // degrade to the plain "IMG" badge instead of a broken thumbnail.
-  async function loadImage(entry, kind) {
-    const fallback = () => {
-      image.remove();
-      kind.textContent = "IMG";
-    };
+  // Images are loaded directly from disk through the Tauri asset protocol.
+  // No base64 encoding or IPC payload is needed; the webview fetches the
+  // file itself, so memory usage scales with the rendered size only.
+  // Prefer the downscaled thumbnail for list rendering.
+  function loadImage(entry, kind) {
+    const src = entry.image_thumbnail_path || entry.image_path;
+    if (!src) { kind.textContent = "IMG"; return; }
 
     const image = document.createElement("img");
     image.alt = entry.preview;
-    image.addEventListener("error", fallback);
+    image.addEventListener("error", () => { image.remove(); kind.textContent = "IMG"; });
+    image.src = convertFileSrc(src);
     kind.append(image);
-
-    if (imageDataUrls.has(entry.id)) {
-      image.src = imageDataUrls.get(entry.id);
-      return;
-    }
-
-    try {
-      const dataUrl = await invoke("get_history_image", { id: entry.id });
-      imageDataUrls.set(entry.id, dataUrl);
-      image.src = dataUrl;
-    } catch (_) {
-      fallback();
-    }
   }
 
   function showSettings() {
@@ -209,7 +193,6 @@
   });
 
   clearHotkeyButton.addEventListener("mousedown", (event) => {
-    // Keep focus handling away from the readonly capture input.
     event.preventDefault();
   });
 

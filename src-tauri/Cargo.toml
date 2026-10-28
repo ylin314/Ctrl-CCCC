@@ -12,13 +12,13 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 arboard = { version = "3", features = ["wayland-data-control"] }
-base64 = "0.23"
 clipboard-rs = { version = "0.3", features = ["wayland"] }
 dirs = "6"
+image = { version = "0.25", default-features = false, features = ["png"] }
 enigo = "0.6"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
+tauri = { version = "2", features = ["macos-private-api", "protocol-asset", "tray-icon"] }
 tauri-plugin-autostart = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-single-instance = "2"
@@ -39,3 +39,6 @@ windows = { version = "0.61", features = [
     "Win32_UI_Accessibility",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+
+

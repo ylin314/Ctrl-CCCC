@@ -1,13 +1,12 @@
 (() => {
   "use strict";
 
-  const { invoke } = window.__TAURI__.core;
+  const { invoke, convertFileSrc } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
   const root = document.getElementById("toast");
   const kind = document.getElementById("kind");
   const message = document.getElementById("message");
   const thumb = document.getElementById("thumb");
-  const thumbnailDataUrls = new Map();
   let thumbGeneration = 0;
   let hideTimer = 0;
   let hideWindowTimer = 0;
@@ -23,41 +22,31 @@
     });
   }
 
-  // Image snapshots are fetched on demand and cached per entry, mirroring the
-  // history and quick-paste panels. A newer toast always wins, so a slow fetch
-  // for an older entry can never overwrite the newest one.
-  async function renderThumbnail(payload) {
+  // Images are loaded directly from disk through the Tauri asset protocol.
+  // Prefer the downscaled thumbnail; fall back to the full image path.
+  // A newer toast always wins, so a stale load can never overwrite it.
+  function renderThumbnail(payload) {
     const generation = ++thumbGeneration;
     thumb.replaceChildren();
-    if (!payload.image_id) return;
+
+    const src = payload.image_thumbnail_path || payload.image_path;
+    if (!src) return;
 
     const image = document.createElement("img");
     image.alt = payload.message;
-    const drop = () => {
-      image.remove();
-    };
-    image.addEventListener("error", drop);
-    thumb.append(image);
-
-    let dataUrl = thumbnailDataUrls.get(payload.image_id);
-    if (!dataUrl) {
-      try {
-        dataUrl = await invoke("get_history_image", { id: payload.image_id });
-      } catch (_) {
-        if (generation === thumbGeneration) drop();
-        return;
-      }
-      if (generation !== thumbGeneration) return;
-      thumbnailDataUrls.set(payload.image_id, dataUrl);
+    image.addEventListener("error", () => {
+      if (generation === thumbGeneration) image.remove();
+    });
+    image.src = convertFileSrc(src);
+    if (generation === thumbGeneration) {
+      thumb.append(image);
     }
-
-    image.src = dataUrl;
   }
 
   listen("clipboard://changed", async ({ payload }) => {
     kind.textContent = payload.kind;
     message.textContent = payload.message;
-    await renderThumbnail(payload);
+    renderThumbnail(payload);
     root.style.setProperty("--fade", `${payload.fade_ms}ms`);
 
     // A newer toast supersedes any pending dismissal of the previous one.
@@ -106,7 +95,6 @@
         },
         { once: true }
       );
-      // Safety net for browsers/backends that never report the transition.
       hideWindowTimer = window.setTimeout(finish, fadeMs + 400);
     } else {
       finish();

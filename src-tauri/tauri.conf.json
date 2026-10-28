@@ -41,28 +41,14 @@
         "center": false,
         "dragDropEnabled": false,
         "focusable": false
-      },
-      {
-        "label": "quick",
-        "title": "Ctrl-CCCC 快捷输入",
-        "url": "quick.html",
-        "width": 360,
-        "height": 460,
-        "visible": false,
-        "center": false,
-        "resizable": false,
-        "skipTaskbar": true,
-        "focus": true,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "shadow": false,
-        "dragDropEnabled": false,
-        "focusable": true
       }
     ],
     "security": {
-      "csp": "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+      "csp": "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' asset: http://asset.localhost data:",
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["**"]
+      }
     },
     "macOSPrivateApi": true
   },
