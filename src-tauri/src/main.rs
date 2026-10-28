@@ -16,12 +16,14 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, RwLock,
     },
     thread,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+#[cfg(target_os = "windows")]
+use std::sync::atomic::AtomicIsize;
 use tauri::{
     menu::{MenuBuilder, MenuEvent},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -625,7 +627,7 @@ fn show_history_window(app: &AppHandle) -> Result<(), String> {
 }
 
 fn create_quick_window(app: &AppHandle) -> Result<WebviewWindow, String> {
-    WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("quick.html".into()))
+    let mut builder = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("quick.html".into()))
         .title("Ctrl-CCCC 快捷输入")
         .inner_size(QUICK_WINDOW_WIDTH, QUICK_WINDOW_HEIGHT)
         .visible(false)
@@ -635,10 +637,15 @@ fn create_quick_window(app: &AppHandle) -> Result<WebviewWindow, String> {
         .decorations(false)
         .transparent(true)
         .always_on_top(true)
-        .shadow(false)
-        .drag_and_drop(false)
-        .build()
-        .map_err(|error| error.to_string())
+        .shadow(false);
+
+    // `drag_and_drop` is only available in Tauri's Windows builder API.
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.drag_and_drop(false);
+    }
+
+    builder.build().map_err(|error| error.to_string())
 }
 
 fn show_quick_window(app: &AppHandle) -> Result<(), String> {
@@ -701,8 +708,11 @@ fn monitor_quick_focus(app: AppHandle) {
                 || QUICK_PASTE_IN_PROGRESS.load(Ordering::Relaxed)
                 || quick_dragging()
             {
-                if let Ok(hwnd) = window.hwnd() {
-                    clear_stale_quick_drag(hwnd.0 as isize);
+                #[cfg(target_os = "windows")]
+                {
+                    if let Ok(hwnd) = window.hwnd() {
+                        clear_stale_quick_drag(hwnd.0 as isize);
+                    }
                 }
                 thread::sleep(Duration::from_millis(50));
                 continue;
@@ -1112,8 +1122,11 @@ fn main() {
                     } else if QUICK_WAS_FOCUSED.load(Ordering::Relaxed)
                         && !QUICK_PASTE_IN_PROGRESS.load(Ordering::Relaxed)
                     {
-                        if let Ok(hwnd) = window.hwnd() {
-                            clear_stale_quick_drag(hwnd.0 as isize);
+                        #[cfg(target_os = "windows")]
+                        {
+                            if let Ok(hwnd) = window.hwnd() {
+                                clear_stale_quick_drag(hwnd.0 as isize);
+                            }
                         }
                         let shown_at = QUICK_SHOWN_AT.load(Ordering::Acquire);
                         let in_grace_period = shown_at > 0 && now_millis() - shown_at < 500;
