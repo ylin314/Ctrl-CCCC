@@ -10,32 +10,30 @@
   [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-4A90E2)](#)
   [![UI](https://img.shields.io/badge/UI-HTML%20%7C%20CSS%20%7C%20JS-E34F26)](#)
   [![Clipboard](https://img.shields.io/badge/Clipboard-clipboard--rs%20%2B%20arboard-7C3AED)](#)
-  [![Version](https://img.shields.io/badge/Version-0.1.0-blue)](#)
+  [![Version](https://img.shields.io/badge/Version-0.2.1-blue)](#)
   [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 </div>
 
 ---
 
-你是否遇到复制后粘贴发现没有复制成功的情况？
+你是否遇到复制后粘贴发现没有复制成功？
 
-Ctrl-CCCC 是一款基于 Rust 和 Tauri 的轻量级跨平台剪贴板变化通知工具，能在复制内容后进行通知
+你是否遇到跨设备剪切板同步失败但误认为已复制成功？
+
+Ctrl-CCCC 是一款基于 Rust 和 Tauri 的轻量级跨平台剪贴板变化通知工具，能在复制内容后进行通知。
+
+> [!NOTE]
+> macOS 和 Linux 未经过测试
 
 ## 行为
 
-- 启动后收到系统托盘。
-- 左键单击托盘图标：打开主菜单/设置窗口。
-- 右键托盘图标：显示 `主菜单` 和 `退出`。
-- 主菜单窗口显示时有任务栏图标。
-- 关闭主菜单窗口不会退出软件，只是隐藏到托盘。
-- 托盘 `退出` 才会真正结束程序。
-- 文本最多显示 200 个字符，超出以 `…` 结束。
-- 图片显示缩略图和分辨率。
-- 文件显示 `文件：[文件名] 等 N 个`。
-- 空内容显示 `（空）`。
-- 剪贴板历史默认保留 50 条，可设置为 5-500 条。
-- 可从历史中单击任意条目重新复制。
-- 全局快捷键可打开快捷输入面板，单击条目直接输入到当前位置，默认 `Win+C`。
-- 快捷输入快捷键设为空时关闭该功能。
+- 剪切板发生变化时自动弹窗提示
+- 文本最多显示 200 个字符，超出以 `…` 结束
+- 图片显示缩略图和分辨率
+- 文件显示 `文件：[文件名] 等 N 个`
+- 空内容显示 `（空）`
+- 可选择开启剪切板功能
+- 剪贴板历史默认保留 50 条，可设置为 5-500 条
 
 ## 设置
 
