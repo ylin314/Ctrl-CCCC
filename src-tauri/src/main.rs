@@ -14,7 +14,7 @@ use std::{
     path::PathBuf,
     str::FromStr,
     sync::{
-        atomic::{AtomicBool, AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering},
         Arc, RwLock,
     },
     thread,
@@ -33,7 +33,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use windows::{
     core::BOOL,
     Win32::{
-        Foundation::{POINT, RPC_E_CHANGED_MODE},
+        Foundation::{HWND, POINT, RPC_E_CHANGED_MODE},
         Graphics::Gdi::ClientToScreen,
         System::Com::{
             CoCreateInstance, CoInitializeEx, CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED,
@@ -45,8 +45,9 @@ use windows::{
             CUIAutomation, IUIAutomation, IUIAutomationTextPattern2, UIA_TextPattern2Id,
         },
         UI::WindowsAndMessaging::{
-            GetForegroundWindow, GetGUIThreadInfo, GetWindowThreadProcessId, GUITHREADINFO,
-            GUI_CARETBLINKING,
+            GetAncestor, GetCursorPos, GetForegroundWindow, GetGUIThreadInfo,
+            GetWindowThreadProcessId, IsIconic, SetForegroundWindow, ShowWindow, WindowFromPoint,
+            GA_ROOT, GUITHREADINFO, GUI_CARETBLINKING, SW_RESTORE,
         },
     },
 };
@@ -54,11 +55,13 @@ use windows::{
 const EVENT: &str = "clipboard://changed";
 const CONFIG_FILE: &str = "ctrl-cccc.json";
 const HISTORY_FILE: &str = "history.json";
+const CF_PNG: &str = "PNG";
 static QUICK_DRAGGING_UNTIL: AtomicU64 = AtomicU64::new(0);
-static QUICK_SUPPRESS_FOCUS_CLOSE: AtomicBool = AtomicBool::new(false);
-static QUICK_PASTE_KEEP_VISIBLE: AtomicBool = AtomicBool::new(false);
+static QUICK_PASTE_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
 static QUICK_FOCUS_MONITOR_TOKEN: AtomicU64 = AtomicU64::new(0);
 static QUICK_WAS_FOCUSED: AtomicBool = AtomicBool::new(false);
+#[cfg(target_os = "windows")]
+static QUICK_PREVIOUS_FOCUS: AtomicIsize = AtomicIsize::new(0);
 
 fn now_millis() -> u64 {
     SystemTime::now()
@@ -68,9 +71,40 @@ fn now_millis() -> u64 {
 }
 
 fn quick_dragging() -> bool {
-    let until = QUICK_DRAGGING_UNTIL.load(Ordering::Relaxed);
+    let until = QUICK_DRAGGING_UNTIL.load(Ordering::Acquire);
     until != 0 && now_millis() < until
 }
+
+#[cfg(target_os = "windows")]
+fn cursor_is_over_quick_window(window_hwnd: isize) -> bool {
+    let hwnd = HWND(window_hwnd as *mut core::ffi::c_void);
+
+    let mut cursor = POINT::default();
+    if unsafe { GetCursorPos(&mut cursor) }.is_err() {
+        return true;
+    }
+
+    let hit_window = unsafe { WindowFromPoint(cursor) };
+    if hit_window.is_invalid() {
+        return false;
+    }
+
+    let root_window = unsafe { GetAncestor(hit_window, GA_ROOT) };
+    !root_window.is_invalid() && root_window.0 == hwnd.0
+}
+
+/// Native window dragging does not reliably deliver a final pointer event to
+/// the webview. If focus is lost while the cursor is already over another
+/// window, the drag must have ended, so clear its protection immediately.
+#[cfg(target_os = "windows")]
+fn clear_stale_quick_drag(window_hwnd: isize) {
+    if quick_dragging() && !cursor_is_over_quick_window(window_hwnd) {
+        QUICK_DRAGGING_UNTIL.store(0, Ordering::Release);
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn clear_stale_quick_drag(_window_hwnd: isize) {}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -173,9 +207,6 @@ impl Config {
         self.fade_ms = self.fade_ms.min(self.duration_ms / 2);
         self.history_limit = self.history_limit.clamp(5, 500);
         self.quick_hotkey = self.quick_hotkey.trim().to_string();
-        if self.quick_hotkey.is_empty() {
-            self.quick_hotkey = "super+c".to_string();
-        }
     }
 }
 
@@ -185,6 +216,9 @@ struct ToastPayload {
     message: String,
     duration_ms: u64,
     fade_ms: u64,
+    /// History entry whose PNG snapshot should be rendered as a thumbnail.
+    /// `None` for text, file and empty toasts.
+    image_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -312,12 +346,21 @@ impl ClipboardHandler for ToastWatcher {
             Ok(config) => config.clone(),
             Err(_) => return,
         };
-        let payload = read_toast_payload(&self.files_clipboard, &mut self.text_clipboard, &config);
-        let _ = self.app.emit(EVENT, payload);
 
-        if let Ok(entry) = capture_entry(&self.files_clipboard, &mut self.text_clipboard) {
+        let entry = capture_entry(&self.files_clipboard, &mut self.text_clipboard);
+        let payload = match &entry {
+            Ok(entry) => toast_payload(entry, &config),
+            Err(_) => read_toast_payload(&self.files_clipboard, &mut self.text_clipboard, &config),
+        };
+
+        // Register the entry before announcing it so the toast can resolve its
+        // thumbnail snapshot, and so the history views already list the newest
+        // item when they refresh on the same event.
+        if let Ok(entry) = entry {
             add_history_entry(&self.history, entry, config.history_limit);
         }
+
+        let _ = self.app.emit(EVENT, payload);
     }
 }
 #[tauri::command]
@@ -360,6 +403,30 @@ fn save_settings(
     }
 
     Ok(settings)
+}
+
+#[tauri::command]
+fn clear_quick_hotkey(app: AppHandle, state: State<'_, AppState>) -> Result<Config, String> {
+    let mut config = state
+        .config
+        .read()
+        .map_err(|_| "settings lock poisoned".to_string())?
+        .clone();
+
+    apply_quick_hotkey(&app, "")?;
+
+    config.quick_hotkey.clear();
+    Config::write(&config).map_err(|error| error.to_string())?;
+
+    {
+        let mut stored = state
+            .config
+            .write()
+            .map_err(|_| "settings lock poisoned".to_string())?;
+        *stored = config.clone();
+    }
+
+    Ok(config)
 }
 
 #[tauri::command]
@@ -430,8 +497,15 @@ fn open_quick_paste(app: AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn hide_quick_paste(app: AppHandle) -> Result<(), String> {
-    QUICK_PASTE_KEEP_VISIBLE.store(false, Ordering::Relaxed);
     if let Some(window) = app.get_webview_window("quick") {
+        window.hide().map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn hide_toast(app: AppHandle) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("toast") {
         window.hide().map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -440,45 +514,64 @@ fn hide_quick_paste(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn set_quick_paste_dragging(dragging: bool) {
     let lifetime = if dragging { now_millis() + 5_000 } else { 0 };
-    QUICK_DRAGGING_UNTIL.store(lifetime, Ordering::Relaxed);
+    QUICK_DRAGGING_UNTIL.store(lifetime, Ordering::Release);
+}
+
+#[tauri::command]
+fn begin_quick_paste_drag(window: WebviewWindow) -> Result<(), String> {
+    // The focus-loss handler may run as soon as the native drag starts. Mark
+    // the drag first, then hand control to the OS, so the two operations
+    // cannot race in the frontend.
+    QUICK_DRAGGING_UNTIL.store(now_millis() + 5_000, Ordering::Release);
+    if let Err(error) = window.start_dragging() {
+        QUICK_DRAGGING_UNTIL.store(0, Ordering::Release);
+        return Err(error.to_string());
+    }
+    Ok(())
 }
 #[tauri::command]
 fn quick_paste(app: AppHandle, state: State<'_, AppState>, id: String) -> Result<(), String> {
     let entry = find_history_entry(state.history.clone(), id)?;
-    let mut clipboard = ClipboardContext::new().map_err(|error| error.to_string())?;
-    write_entry_to_clipboard(&mut clipboard, &entry)?;
+    if QUICK_PASTE_IN_PROGRESS.swap(true, Ordering::Relaxed) {
+        return Err("quick paste is already in progress".to_string());
+    }
 
-    // Release focus without hiding the panel, so the previous target window
-    // receives the simulated paste while the panel remains visible.
-    if let Some(window) = app.get_webview_window("quick") {
-        QUICK_SUPPRESS_FOCUS_CLOSE.store(true, Ordering::Relaxed);
-        QUICK_PASTE_KEEP_VISIBLE.store(true, Ordering::Relaxed);
-        window
-            .set_focusable(false)
+    // Prevent the focus monitor from closing the panel while focus is being
+    // handed back to the previous target window.
+    let result = (|| {
+        let mut clipboard = ClipboardContext::new().map_err(|error| error.to_string())?;
+        write_entry_to_clipboard(&mut clipboard, &entry)?;
+
+        #[cfg(target_os = "windows")]
+        restore_previous_focus();
+
+        thread::sleep(Duration::from_millis(160));
+
+        let mut enigo = Enigo::new(&Settings::default()).map_err(|error| error.to_string())?;
+        let modifier = if cfg!(target_os = "macos") {
+            Key::Meta
+        } else {
+            Key::Control
+        };
+        enigo
+            .key(modifier, Direction::Press)
             .map_err(|error| error.to_string())?;
-    }
-    thread::sleep(Duration::from_millis(120));
+        enigo
+            .key(Key::Unicode('v'), Direction::Click)
+            .map_err(|error| error.to_string())?;
+        enigo
+            .key(modifier, Direction::Release)
+            .map_err(|error| error.to_string())?;
+        Ok(())
+    })();
+    QUICK_PASTE_IN_PROGRESS.store(false, Ordering::Relaxed);
 
-    let mut enigo = Enigo::new(&Settings::default()).map_err(|error| error.to_string())?;
-    let modifier = if cfg!(target_os = "macos") {
-        Key::Meta
-    } else {
-        Key::Control
-    };
-    enigo
-        .key(modifier, Direction::Press)
-        .map_err(|error| error.to_string())?;
-    enigo
-        .key(Key::Unicode('v'), Direction::Click)
-        .map_err(|error| error.to_string())?;
-    enigo
-        .key(modifier, Direction::Release)
-        .map_err(|error| error.to_string())?;
-
-    if let Some(window) = app.get_webview_window("quick") {
-        let _ = window.set_focusable(true);
+    if result.is_ok() {
+        if let Some(window) = app.get_webview_window("quick") {
+            let _ = window.hide();
+        }
     }
-    Ok(())
+    result
 }
 
 #[tauri::command]
@@ -536,6 +629,9 @@ fn apply_quick_hotkey(app: &AppHandle, shortcut: &str) -> Result<(), String> {
     global_shortcut
         .unregister_all()
         .map_err(|error| error.to_string())?;
+    if shortcut.is_empty() {
+        return Ok(());
+    }
     global_shortcut
         .register(shortcut)
         .map_err(|error| error.to_string())?;
@@ -567,8 +663,16 @@ fn show_quick_window(app: &AppHandle) -> Result<(), String> {
     let Some(window) = app.get_webview_window("quick") else {
         return Err("quick paste window not found".to_string());
     };
-    QUICK_PASTE_KEEP_VISIBLE.store(false, Ordering::Relaxed);
     QUICK_WAS_FOCUSED.store(false, Ordering::Relaxed);
+
+    #[cfg(target_os = "windows")]
+    if !window.is_visible().unwrap_or(false) {
+        let foreground = unsafe { GetForegroundWindow() };
+        if !foreground.is_invalid() {
+            QUICK_PREVIOUS_FOCUS.store(foreground.0 as isize, Ordering::Relaxed);
+        }
+    }
+
     monitor_quick_focus(app.app_handle().clone());
 
     let (anchor_x, anchor_y) = quick_anchor_position(app);
@@ -615,7 +719,8 @@ fn show_quick_window(app: &AppHandle) -> Result<(), String> {
 fn monitor_quick_focus(app: AppHandle) {
     let token = QUICK_FOCUS_MONITOR_TOKEN.fetch_add(1, Ordering::Relaxed) + 1;
     std::thread::spawn(move || {
-        thread::sleep(Duration::from_millis(1200));
+        // Give the webview one short scheduling cycle to receive focus.
+        thread::sleep(Duration::from_millis(80));
 
         loop {
             if QUICK_FOCUS_MONITOR_TOKEN.load(Ordering::Relaxed) != token {
@@ -629,10 +734,13 @@ fn monitor_quick_focus(app: AppHandle) {
                 return;
             }
             if !QUICK_WAS_FOCUSED.load(Ordering::Relaxed)
-                || QUICK_PASTE_KEEP_VISIBLE.load(Ordering::Relaxed)
+                || QUICK_PASTE_IN_PROGRESS.load(Ordering::Relaxed)
                 || quick_dragging()
             {
-                thread::sleep(Duration::from_millis(200));
+                if let Ok(hwnd) = window.hwnd() {
+                    clear_stale_quick_drag(hwnd.0 as isize);
+                }
+                thread::sleep(Duration::from_millis(50));
                 continue;
             }
             if !window.is_focused().unwrap_or(false) {
@@ -640,9 +748,28 @@ fn monitor_quick_focus(app: AppHandle) {
                 return;
             }
 
-            thread::sleep(Duration::from_millis(200));
+            thread::sleep(Duration::from_millis(50));
         }
     });
+}
+#[cfg(target_os = "windows")]
+fn restore_previous_focus() {
+    let value = QUICK_PREVIOUS_FOCUS.load(Ordering::Relaxed);
+    if value == 0 {
+        return;
+    }
+
+    let hwnd = HWND(value as *mut core::ffi::c_void);
+    if hwnd.is_invalid() {
+        return;
+    }
+
+    unsafe {
+        if IsIconic(hwnd).as_bool() {
+            let _ = ShowWindow(hwnd, SW_RESTORE);
+        }
+        let _ = SetForegroundWindow(hwnd);
+    }
 }
 fn constrain_quick_window(window: &Window) {
     let Ok(current) = window.outer_position() else {
@@ -888,9 +1015,67 @@ fn read_toast_payload(
         message,
         duration_ms: config.duration_ms,
         fade_ms: config.fade_ms,
+        image_id: None,
     }
 }
 
+/// Builds the toast for a freshly captured entry. The entry is registered in
+/// the history before the event is emitted, so `image_id` always resolves to a
+/// PNG snapshot the toast window can fetch.
+fn toast_payload(entry: &ClipboardEntry, config: &Config) -> ToastPayload {
+    let (kind, message) = match entry.kind.as_str() {
+        "image" => (
+            "图片",
+            match (entry.image_width, entry.image_height) {
+                (Some(width), Some(height)) => format!("[{width}]x[{height}]"),
+                _ => "（无法读取尺寸）".to_string(),
+            },
+        ),
+        "files" => ("文件", format!("文件：{}", entry.preview)),
+        _ => (
+            "文本",
+            match &entry.text {
+                Some(text) if !text.is_empty() => truncate_chars(text, 200),
+                _ => "（空）".to_string(),
+            },
+        ),
+    };
+
+    ToastPayload {
+        kind,
+        message,
+        duration_ms: config.duration_ms,
+        fade_ms: config.fade_ms,
+        image_id: entry.image_path.as_ref().map(|_| entry.id.clone()),
+    }
+}
+
+/// Width and height of a PNG byte stream, read straight from its IHDR chunk.
+fn png_dimensions(bytes: &[u8]) -> Option<(u32, u32)> {
+    // 8 byte signature + 4 byte chunk length + 4 byte "IHDR" + 13 byte header.
+    if bytes.len() < 24 || &bytes[12..16] != b"IHDR" {
+        return None;
+    }
+    let width = u32::from_be_bytes([bytes[16], bytes[17], bytes[18], bytes[19]]);
+    let height = u32::from_be_bytes([bytes[20], bytes[21], bytes[22], bytes[23]]);
+    if width == 0 || height == 0 {
+        return None;
+    }
+    Some((width, height))
+}
+
+/// Copies the PNG payload published on the clipboard to `path` unchanged.
+///
+/// Returns `None` when the clipboard has no PNG format, so the caller can fall
+/// back to decoding the raw image data.
+fn save_clipboard_png(clipboard: &ClipboardContext, path: &std::path::Path) -> Option<(u32, u32)> {
+    let bytes = clipboard.get_buffer(CF_PNG).ok()?;
+    // Validate before touching the disk so a malformed payload never lands in
+    // the history directory.
+    let size = png_dimensions(&bytes)?;
+    fs::write(path, &bytes).ok()?;
+    Some(size)
+}
 fn capture_entry(
     clipboard: &ClipboardContext,
     arboard: &mut Arboard,
@@ -918,6 +1103,30 @@ fn capture_entry(
                     image_height: None,
                 });
             }
+        }
+    }
+
+    // Fast path: browsers, the Snipping Tool and most apps publish the encoded
+    // PNG on the clipboard. Keeping those bytes verbatim is lossless and avoids
+    // decoding and re-encoding a large screenshot, which costs about a second
+    // and would delay every toast.
+    if let Some(image_path) = history_dir().map(|dir| dir.join(format!("{id}.png"))) {
+        if let Some(parent) = image_path.parent() {
+            let _ = fs::create_dir_all(parent);
+        }
+        if let Some((width, height)) = save_clipboard_png(clipboard, &image_path) {
+            return Ok(ClipboardEntry {
+                id,
+                kind: "image".to_string(),
+                title: "图片".to_string(),
+                preview: format!("[{width}]x[{height}]"),
+                timestamp_ms: timestamp,
+                text: None,
+                files: None,
+                image_path: Some(image_path.to_string_lossy().into_owned()),
+                image_width: Some(width),
+                image_height: Some(height),
+            });
         }
     }
 
@@ -1003,12 +1212,12 @@ fn read_content(clipboard: &ClipboardContext, arboard: &mut Arboard) -> (&'stati
 
     if let Ok(image) = clipboard.get_image() {
         let (width, height) = image.get_size();
-        return ("图片", format!("图片 [{width}]x[{height}]"));
+        return ("图片", format!("[{width}]x[{height}]"));
     }
 
     if let Ok(image) = arboard.get_image() {
         let (width, height) = (image.width, image.height);
-        return ("图片", format!("图片 [{width}]x[{height}]"));
+        return ("图片", format!("[{width}]x[{height}]"));
     }
 
     let image_hint = clipboard.has(ContentFormat::Image)
@@ -1025,7 +1234,7 @@ fn read_content(clipboard: &ClipboardContext, arboard: &mut Arboard) -> (&'stati
             })
             .unwrap_or(false);
     if image_hint {
-        return ("图片", "图片（无法读取尺寸）".to_string());
+        return ("图片", "（无法读取尺寸）".to_string());
     }
 
     if let Ok(text) = arboard.get_text() {
@@ -1100,7 +1309,7 @@ fn main() {
                 if window.label() == "quick" {
                     constrain_quick_window(window);
                     if quick_dragging() {
-                        QUICK_DRAGGING_UNTIL.store(now_millis() + 1_000, Ordering::Relaxed);
+                        QUICK_DRAGGING_UNTIL.store(now_millis() + 1_000, Ordering::Release);
                     }
                 }
             }
@@ -1108,6 +1317,17 @@ fn main() {
                 if window.label() == "quick" {
                     if *focused {
                         QUICK_WAS_FOCUSED.store(true, Ordering::Relaxed);
+                    } else if QUICK_WAS_FOCUSED.load(Ordering::Relaxed)
+                        && !QUICK_PASTE_IN_PROGRESS.load(Ordering::Relaxed)
+                    {
+                        // The monitor is the continuous safety net; this event
+                        // path closes the panel immediately on focus loss.
+                        if let Ok(hwnd) = window.hwnd() {
+                            clear_stale_quick_drag(hwnd.0 as isize);
+                        }
+                        if !quick_dragging() {
+                            let _ = window.hide();
+                        }
                     }
                 }
             }
@@ -1179,13 +1399,16 @@ fn main() {
             get_history_image,
             get_settings,
             hide_quick_paste,
+            hide_toast,
             open_history,
             open_quick_paste,
             place_toast,
             quick_paste,
             save_settings,
+            clear_quick_hotkey,
             set_quick_hotkey_capture,
-            set_quick_paste_dragging
+            set_quick_paste_dragging,
+            begin_quick_paste_drag
         ])
         .run(tauri::generate_context!())
         .expect("Ctrl-CCCC exited unexpectedly");

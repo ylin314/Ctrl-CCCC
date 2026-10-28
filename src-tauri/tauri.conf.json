@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Ctrl-CCCC",
-  "version": "0.1.0",
-  "identifier": "io.github.lin.ctrl-cccc",
+  "version": "1.0.0",
+  "identifier": "cn.ylin314.ctrl-cccc",
   "build": {
     "frontendDist": "../ui"
   },
@@ -62,7 +62,7 @@
       }
     ],
     "security": {
-      "csp": "default-src 'none'; style-src 'self'; script-src 'self'"
+      "csp": "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:"
     },
     "macOSPrivateApi": true
   },

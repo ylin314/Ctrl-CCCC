@@ -88,6 +88,39 @@ input[readonly] {
   cursor: pointer;
 }
 
+.hotkey-input {
+  position: relative;
+}
+
+.hotkey-input input {
+  padding-right: 40px;
+}
+
+.hotkey-clear {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 24px;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  background: #e5484d;
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.hotkey-clear:hover {
+  background: #cf3439;
+}
+
+.hotkey-clear:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .check {
   display: flex;
   align-items: center;

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
   <title>Ctrl-CCCC</title>
   <link rel="stylesheet" href="main.css" />
 </head>
@@ -41,10 +41,13 @@
           <input id="history-limit" type="number" min="5" max="500" step="1" required />
         </label>
 
-        <label class="field">
+        <div class="field">
           <span>快捷输入快捷键</span>
-          <input id="quick-hotkey" type="text" readonly placeholder="点击后按下组合键" />
-        </label>
+          <div class="hotkey-input">
+            <input id="quick-hotkey" type="text" readonly placeholder="点击后按下组合键" />
+            <button id="clear-hotkey-button" class="hotkey-clear" type="button" title="清除快捷键并关闭功能" aria-label="清除快捷键并关闭功能">✕</button>
+          </div>
+        </div>
 
         <label class="check">
           <input id="autostart" type="checkbox" />

@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src data:" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
   <title>Ctrl-CCCC 快捷输入</title>
   <link rel="stylesheet" href="quick.css" />
 </head>
 <body>
   <main class="quick-panel">
-    <header id="quick-title" data-tauri-drag-region title="拖动调整位置">
+    <header id="quick-title" title="按住并拖动调整位置">
       <strong>快捷输入</strong>
       <button id="close-button" type="button">✕</button>
     </header>

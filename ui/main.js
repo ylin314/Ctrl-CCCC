@@ -10,6 +10,7 @@
   const autostart = document.getElementById("autostart");
   const historyLimit = document.getElementById("history-limit");
   const quickHotkey = document.getElementById("quick-hotkey");
+  const clearHotkeyButton = document.getElementById("clear-hotkey-button");
   const status = document.getElementById("status");
   const settingsView = document.getElementById("settings-view");
   const historyView = document.getElementById("history-view");
@@ -98,10 +99,7 @@
     const kind = document.createElement("span");
     kind.className = "kind";
     if (entry.image_path) {
-      const image = document.createElement("img");
-      image.alt = entry.preview;
-      loadImage(entry, image);
-      kind.append(image);
+      loadImage(entry, kind);
     } else {
       kind.textContent = entry.kind === "image" ? "IMG" : entry.kind === "files" ? "FILE" : "TXT";
     }
@@ -137,17 +135,31 @@
     return item;
   }
 
-  async function loadImage(entry, image) {
+  // Image snapshots live on disk and are handed back as `data:image/png` URLs.
+  // If a snapshot cannot be rendered (missing file, blocked CSP, decode error)
+  // degrade to the plain "IMG" badge instead of a broken thumbnail.
+  async function loadImage(entry, kind) {
+    const fallback = () => {
+      image.remove();
+      kind.textContent = "IMG";
+    };
+
+    const image = document.createElement("img");
+    image.alt = entry.preview;
+    image.addEventListener("error", fallback);
+    kind.append(image);
+
     if (imageDataUrls.has(entry.id)) {
       image.src = imageDataUrls.get(entry.id);
       return;
     }
+
     try {
       const dataUrl = await invoke("get_history_image", { id: entry.id });
       imageDataUrls.set(entry.id, dataUrl);
       image.src = dataUrl;
     } catch (_) {
-      image.remove();
+      fallback();
     }
   }
 
@@ -194,6 +206,35 @@
     if (event.shiftKey) parts.push("shift");
     parts.push(event.code);
     quickHotkey.value = parts.join("+");
+  });
+
+  clearHotkeyButton.addEventListener("mousedown", (event) => {
+    // Keep focus handling away from the readonly capture input.
+    event.preventDefault();
+  });
+
+  clearHotkeyButton.addEventListener("click", async () => {
+    if (clearHotkeyButton.disabled) return;
+    const previousHotkey = quickHotkey.value;
+    clearHotkeyButton.disabled = true;
+    hotkeyCaptureActive = false;
+    delete quickHotkey.dataset.capturing;
+    delete quickHotkey.dataset.previousValue;
+    quickHotkey.value = "";
+    quickHotkey.placeholder = "点击后按下组合键";
+    status.textContent = "";
+
+    try {
+      const settings = await invoke("clear_quick_hotkey");
+      quickHotkey.value = settings.quick_hotkey;
+      status.textContent = "快捷输入已关闭";
+    } catch (error) {
+      quickHotkey.value = previousHotkey;
+      status.textContent = `关闭快捷键失败：${error}`;
+    } finally {
+      clearHotkeyButton.disabled = false;
+      quickHotkey.blur();
+    }
   });
 
   form.addEventListener("submit", async (event) => {
